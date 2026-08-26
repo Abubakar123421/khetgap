@@ -1,0 +1,19 @@
+sugarcane_demo:
+  name: sugarcane_demo
+  max_width: 1600
+  exg_threshold: 25
+  use_hsv: true
+  hsv_lower: [25, 35, 25]
+  hsv_upper: [100, 255, 255]
+  morphology_kernel_px: 3
+  morphology_iterations: 1
+  min_component_area_px: 30
+  expected_row_spacing_m: 1.2
+  min_row_spacing_px: 24
+  row_band_half_width_px: 5
+  occupancy_threshold: 0.18
+  min_gap_m: 1.0
+  min_gap_px: 30
+  planting_units_per_meter: 1.0
+  safety_factor: 1.0
+
