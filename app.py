@@ -1,6 +1,7 @@
 import json
 import streamlit as st
 import numpy as np
+import pandas as pd
 from PIL import Image
 from pathlib import Path
 
@@ -18,6 +19,8 @@ ICON_RULER = '<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4
 ICON_SETTINGS = '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/>'
 ICON_INFO = '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>'
 ICON_BAR_CHART = '<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>'
+ICON_RESTART = '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>'
+ICON_TABLE = '<path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/>'
 
 def h_title(svg, title, level=3):
     return f"<h{level} style='font-weight: 500; font-size: 1.1rem; color: #0A0A0A; display: flex; align-items: center;'>{get_icon(svg)}{title}</h{level}>"
@@ -123,6 +126,7 @@ st.markdown("""
         border-radius: 4px;
         transition: all 0.2s ease;
         font-weight: 500;
+        width: 100%;
     }
     
     .stDownloadButton > button:hover {
@@ -175,8 +179,19 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# --- STATE MANAGEMENT ---
+def reset_demo():
+    for key in ['analysis_result', 'processed_image']:
+        if key in st.session_state:
+            del st.session_state[key]
+
 # --- SIDEBAR CONTROLS ---
 with st.sidebar:
+    # 1. Reset Button for live demos
+    st.button("Reset Analysis", on_click=reset_demo, use_container_width=True)
+    st.markdown("<hr style='border: none; border-top: 1px solid #E4E4E7; margin: 1rem 0 2rem 0;'>", unsafe_allow_html=True)
+
+    # 2. Upload and Sample Data
     st.markdown(h_title(ICON_FOLDER, "Data Source"), unsafe_allow_html=True)
     input_method = st.radio("Select Image Source", ("Sample Fixtures", "Upload Image"), label_visibility="collapsed")
     
@@ -184,32 +199,52 @@ with st.sidebar:
     if input_method == "Upload Image":
         uploaded_file = st.file_uploader("Upload an RGB aerial image", type=["png", "jpg", "jpeg"])
         if uploaded_file is not None:
-            image = Image.open(uploaded_file).convert("RGB")
+            try:
+                image = Image.open(uploaded_file).convert("RGB")
+                st.markdown(f"<span style='color: #71717A; font-size: 0.85rem;'>Detected Dimensions: {image.width}x{image.height} px</span>", unsafe_allow_html=True)
+            except Exception:
+                st.error("Invalid image format.")
+                image = None
     else:
         sample_dir = Path("data/synthetic")
         sample_files = sorted([f.name for f in sample_dir.iterdir() if f.suffix.lower() in {".png", ".jpg"}]) if sample_dir.exists() else []
         if sample_files:
             selected_sample = st.selectbox("Select Sample", sample_files)
-            image = Image.open(sample_dir / selected_sample).convert("RGB")
+            try:
+                image = Image.open(sample_dir / selected_sample).convert("RGB")
+                st.markdown(f"<span style='color: #71717A; font-size: 0.85rem;'>Detected Dimensions: {image.width}x{image.height} px</span>", unsafe_allow_html=True)
+            except Exception:
+                st.error("Error loading sample.")
+                image = None
         else:
             st.warning("No sample files found in data/synthetic/")
 
     st.markdown("<hr style='border: none; border-top: 1px solid #E4E4E7; margin: 2rem 0;'>", unsafe_allow_html=True)
     
-    st.markdown(h_title(ICON_RULER, "Calibration"), unsafe_allow_html=True)
+    # 3. Calibration
+    st.markdown(h_title(ICON_RULER, "Calibration & Crop"), unsafe_allow_html=True)
+    
+    # Crop Profile selection to dynamically set Advanced parameters
+    crop_profile = st.selectbox("Crop Profile", ["Sugarcane", "Maize"])
+    def_exg = 25
+    def_min_gap = 30 if crop_profile == "Sugarcane" else 20
+    def_occupancy = 0.18 if crop_profile == "Sugarcane" else 0.15
+    def_row_spacing = 24 if crop_profile == "Sugarcane" else 15
+    
     meters_per_pixel = st.number_input("Pixel Scale (m/px)", value=0.05, step=0.01, format="%.3f")
     if meters_per_pixel <= 0:
         meters_per_pixel = None
         
     st.markdown("<hr style='border: none; border-top: 1px solid #E4E4E7; margin: 2rem 0;'>", unsafe_allow_html=True)
     
+    # 4. Advanced Tuning
     st.markdown(h_title(ICON_SETTINGS, "Advanced Tuning"), unsafe_allow_html=True)
     
     with st.expander("Pipeline Parameters", expanded=False):
-        exg_threshold = st.slider("ExG Threshold", 0, 100, 25, help="Greenness threshold for vegetation segmentation.")
-        min_gap_px = st.slider("Min Gap Length (px)", 10, 100, 30, help="Minimum pixel length to be considered a planting gap.")
-        occupancy_threshold = st.slider("Occupancy Threshold", 0.0, 1.0, 0.18, step=0.01, help="Fraction of row band that must contain vegetation to be valid.")
-        min_row_spacing_px = st.slider("Min Row Spacing (px)", 10, 100, 24, help="Minimum pixel distance between adjacent rows.")
+        exg_threshold = st.slider("ExG Threshold", 0, 100, def_exg, help="Greenness threshold for vegetation segmentation.")
+        min_gap_px = st.slider("Min Gap Length (px)", 10, 100, def_min_gap, help="Minimum pixel length to be considered a planting gap.")
+        occupancy_threshold = st.slider("Occupancy Threshold", 0.0, 1.0, def_occupancy, step=0.01, help="Fraction of row band that must contain vegetation to be valid.")
+        min_row_spacing_px = st.slider("Min Row Spacing (px)", 10, 100, def_row_spacing, help="Minimum pixel distance between adjacent rows.")
 
     with st.expander("Orientation Overrides", expanded=False):
         use_manual_angle = st.checkbox("Enable Manual Row Angle")
@@ -218,11 +253,6 @@ with st.sidebar:
     st.markdown("<br>", unsafe_allow_html=True)
     run_button = st.button("Run Analysis", type="primary", use_container_width=True)
 
-# Helper function for JSON serialization
-def json_default(value):
-    if isinstance(value, np.generic):
-        return value.item()
-    raise TypeError(f"Cannot serialize {type(value).__name__}")
 
 # --- ANALYSIS EXECUTION ---
 if run_button and image is not None:
@@ -305,13 +335,35 @@ if 'analysis_result' in st.session_state and 'processed_image' in st.session_sta
             else:
                 st.warning("Row Bands debug image not available.")
 
+
+        # Gap Table
+        st.markdown("<hr style='border: none; border-top: 1px solid #E4E4E7; margin: 3rem 0;'>", unsafe_allow_html=True)
+        st.markdown(h_title(ICON_TABLE, 'Detected Gaps (Priority Sorted)'), unsafe_allow_html=True)
+        
+        df_gaps = pd.DataFrame()
+        if result.gaps:
+            gap_data = []
+            for g in result.gaps:
+                gap_data.append({
+                    "Row ID": g.row_id,
+                    "Gap Length (px)": g.length_px,
+                    "Gap Length (m)": round(g.length_m, 2) if g.length_m is not None else "N/A"
+                })
+            df_gaps = pd.DataFrame(gap_data)
+            # Sort by longest gap first
+            df_gaps = df_gaps.sort_values(by="Gap Length (px)", ascending=False).reset_index(drop=True)
+            st.dataframe(df_gaps, use_container_width=True)
+        else:
+            st.info("No gaps detected matching the minimum criteria.")
+
+
         st.markdown("<hr style='border: none; border-top: 1px solid #E4E4E7; margin: 3rem 0;'>", unsafe_allow_html=True)
         st.markdown(h_title(ICON_FOLDER, 'Export Reports'), unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
-        col_export1, col_export2, _ = st.columns([1, 1, 2])
+        col_export1, col_export2, col_export3 = st.columns(3)
         
-        # Overlay Image Download
+        # 1. Overlay Image Download
         from io import BytesIO
         img_buffer = BytesIO()
         Image.fromarray(result.overlay_image).save(img_buffer, format="PNG")
@@ -319,30 +371,44 @@ if 'analysis_result' in st.session_state and 'processed_image' in st.session_sta
             label="Download HD Overlay",
             data=img_buffer.getvalue(),
             file_name="khetgap_overlay.png",
-            mime="image/png",
-            use_container_width=True
+            mime="image/png"
         )
         
-        # JSON Summary Download
-        summary_data = {
-            "metrics": result.metrics,
-            "warnings": result.warnings,
-            "errors": result.errors,
-            "gaps": [
-                {"row_id": g.row_id, "length_px": g.length_px, "length_m": g.length_m} 
-                for g in result.gaps
-            ],
-            "pattern_hints": result.pattern_hints
-        }
-        # Fixed JSON serialization bug for numpy metrics
-        summary_json = json.dumps(summary_data, indent=2, default=json_default)
+        # 2. Text Summary Report
+        report_lines = [
+            "========================================",
+            "      KHETGAP FIELD ANALYSIS REPORT      ",
+            "========================================",
+            f"Rows Detected:   {result.metrics.get('rows_detected', 0)}",
+            f"Gaps Detected:   {result.metrics.get('gaps_detected', 0)}",
+            f"Missing Length:  {missing_m:.2f} m" if missing_m else "Missing Length:  N/A (Uncalibrated)",
+            f"Orientation:     {orientation}",
+            "----------------------------------------",
+            "PATTERN HINTS:"
+        ]
+        if result.pattern_hints:
+            for hint in result.pattern_hints:
+                report_lines.append(f"- {hint.get('description', '')}")
+        else:
+            report_lines.append("- No spatial patterns detected.")
+            
+        report_text = "\\n".join(report_lines)
         col_export2.download_button(
-            label="Download JSON Report",
-            data=summary_json,
-            file_name="khetgap_summary.json",
-            mime="application/json",
-            use_container_width=True
+            label="Download Text Report",
+            data=report_text,
+            file_name="khetgap_summary.txt",
+            mime="text/plain"
         )
+        
+        # 3. CSV Gap Download
+        if not df_gaps.empty:
+            csv_data = df_gaps.to_csv(index=False)
+            col_export3.download_button(
+                label="Download Gap CSV",
+                data=csv_data,
+                file_name="khetgap_table.csv",
+                mime="text/csv"
+            )
         
     else:
         st.error(f"Analysis failed: {result.status}")
