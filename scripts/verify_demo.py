@@ -49,8 +49,13 @@ def main() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     summaries: dict[str, object] = {}
     config = CropConfig(min_gap_px=35, occupancy_threshold=0.16)
-    for name in ("sugarcane_clean", "sugarcane_hard", "negative_no_rows"):
-        image = np.asarray(Image.open(INPUT / f"{name}.png").convert("RGB"))
+    supported_extensions = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".webp"}
+    image_paths = sorted(
+        [p for p in INPUT.iterdir() if p.suffix.lower() in supported_extensions]
+    )
+    for path in image_paths:
+        name = path.stem
+        image = np.asarray(Image.open(path).convert("RGB"))
         started = perf_counter()
         result = analyze_field(image, config)
         elapsed = perf_counter() - started
