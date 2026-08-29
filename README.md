@@ -1,4 +1,4 @@
-# KhetGap core engine
+# KhetGap 
 
 KhetGap converts one RGB aerial field image into detected sugarcane rows,
 planting-gap polygons, an original-image overlay, and calibrated measurements.
