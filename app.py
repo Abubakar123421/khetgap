@@ -10,7 +10,7 @@ from src import CropConfig, analyze_field
 st.set_page_config(page_title="KhetGap | Precision Agriculture", layout="wide")
 
 # --- SVG ICONS ---
-def get_icon(svg_path, color="#0A0A0A", size=18):
+def get_icon(svg_path, color="#18181B", size=18):
     return f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">{svg_path}</svg>'
 
 ICON_LEAF = '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>'
@@ -23,150 +23,291 @@ ICON_RESTART = '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><pa
 ICON_TABLE = '<path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/>'
 
 def h_title(svg, title, level=3):
-    return f"<h{level} style='font-weight: 500; font-size: 1.1rem; color: #0A0A0A; display: flex; align-items: center;'>{get_icon(svg)}{title}</h{level}>"
+    return f"<h{level} style='font-weight: 600; font-size: 1.1rem; color: #18181B; display: flex; align-items: center;'>{get_icon(svg)}{title}</h{level}>"
 
 # --- ULTRA PREMIUM MINIMALIST UI/UX CUSTOM CSS ---
 st.markdown("""
 <style>
-    /* Import Google Fonts (Inter) */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    :root {
+        --kg-text: #18181B;
+        --kg-muted: #3F3F46;
+        --kg-border: #52525B;
+        --kg-rule: #A1A1AA;
+        --kg-bg: #FFFFFF;
+        --kg-sidebar: #F4F4F5;
+        --text-color: #18181B;
+        --background-color: #FFFFFF;
+        --secondary-background-color: #F4F4F5;
+        --primary-color: #18181B;
+    }
+
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
+        color: var(--kg-text);
     }
-    
-    /* Hide Default Streamlit Elements */
+
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     [data-testid="stHeader"] {background: transparent;}
-    
-    /* Overall Background */
-    .stApp {
-        background-color: #FFFFFF;
-        color: #0A0A0A;
+
+    .stApp, [data-testid="stAppViewContainer"] {
+        background-color: var(--kg-bg);
+        color: var(--kg-text);
     }
-    
-    /* Custom Header */
+
+    .stApp label, .stApp li, .stApp h1, .stApp h2, .stApp h3,
+    [data-testid="stWidgetLabel"],
+    [data-testid="stExpander"] summary {
+        color: var(--kg-text) !important;
+    }
+
+    .stApp p,
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stExpander"] p {
+        color: var(--kg-text);
+    }
+
     .hero-container {
         padding: 2rem 0 3rem 0;
         margin-bottom: 2rem;
-        border-bottom: 1px solid #E4E4E7;
+        border-bottom: 1px solid var(--kg-rule);
     }
-    
+
     .hero-title {
         font-size: 2.5rem;
         font-weight: 700;
-        color: #0A0A0A;
+        color: var(--kg-text);
         letter-spacing: -0.03em;
         margin-bottom: 0.2rem;
         display: flex;
         align-items: center;
     }
-    
+
     .hero-subtitle {
         font-size: 1rem;
-        color: #71717A;
-        font-weight: 400;
+        color: var(--kg-text);
+        font-weight: 500;
         letter-spacing: -0.01em;
     }
-    
-    /* Metric Cards (Brutalist Minimalist) */
+
     [data-testid="stMetric"] {
-        background: transparent;
-        border: 1px solid #E4E4E7;
+        background: #FAFAFA;
+        border: 1px solid var(--kg-border);
         border-radius: 4px;
         padding: 1.5rem;
         transition: border-color 0.2s ease;
     }
-    
+
     [data-testid="stMetric"]:hover {
-        border-color: #A1A1AA;
+        border-color: var(--kg-text);
     }
-    
+
     [data-testid="stMetricLabel"] {
         font-size: 0.9rem !important;
-        font-weight: 500 !important;
-        color: #71717A !important;
+        font-weight: 600 !important;
+        color: var(--kg-text) !important;
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
-    
+
+    [data-testid="stMetricLabel"] * {
+        color: var(--kg-text) !important;
+    }
+
     [data-testid="stMetricValue"] {
         font-size: 2.5rem !important;
         font-weight: 600 !important;
-        color: #0A0A0A !important;
+        color: var(--kg-text) !important;
         letter-spacing: -0.03em;
     }
-    
-    /* Primary Button Styling */
-    .stButton > button {
-        background: #0A0A0A;
-        color: #FFFFFF;
-        font-weight: 600;
-        border: 1px solid #0A0A0A;
-        border-radius: 4px;
-        padding: 0.75rem 1.5rem;
-        transition: all 0.2s ease;
+
+    .stButton button,
+    .stDownloadButton button,
+    button[data-testid^="stBaseButton"] {
+        font-weight: 600 !important;
+        border-radius: 4px !important;
+        padding: 0.75rem 1.5rem !important;
         width: 100%;
-        font-size: 1rem;
+        font-size: 1rem !important;
         letter-spacing: -0.01em;
+        transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     }
-    
-    .stButton > button:hover {
-        background: #FFFFFF;
-        color: #0A0A0A;
-        border: 1px solid #0A0A0A;
+
+    /* Filled zinc buttons: primary AND secondary. White labels in default AND hover.
+       Hover invert was the visibility bug — Streamlit lightens the fill while span/p
+       rules kept the opposite text color. */
+    .stButton button[data-testid="stBaseButton-primary"],
+    .stButton button[data-testid="stBaseButton-secondary"],
+    button[data-testid="stBaseButton-primary"],
+    button[data-testid="stBaseButton-secondary"] {
+        background-color: #18181B !important;
+        background-image: none !important;
+        color: #FFFFFF !important;
+        border: 1px solid #18181B !important;
     }
-    
-    /* Download Buttons */
-    .stDownloadButton > button {
-        background: transparent;
-        color: #0A0A0A;
-        border: 1px solid #E4E4E7;
-        border-radius: 4px;
-        transition: all 0.2s ease;
-        font-weight: 500;
-        width: 100%;
+
+    .stButton button[data-testid="stBaseButton-primary"]:hover,
+    .stButton button[data-testid="stBaseButton-primary"]:focus-visible,
+    .stButton button[data-testid="stBaseButton-secondary"]:hover,
+    .stButton button[data-testid="stBaseButton-secondary"]:focus-visible,
+    button[data-testid="stBaseButton-primary"]:hover,
+    button[data-testid="stBaseButton-primary"]:focus-visible,
+    button[data-testid="stBaseButton-secondary"]:hover,
+    button[data-testid="stBaseButton-secondary"]:focus-visible {
+        background-color: #3F3F46 !important;
+        color: #FFFFFF !important;
+        border-color: #3F3F46 !important;
     }
-    
-    .stDownloadButton > button:hover {
-        border-color: #0A0A0A;
-        background: #0A0A0A;
-        color: #FFFFFF;
+
+    .stButton button[data-testid="stBaseButton-primary"] *,
+    .stButton button[data-testid="stBaseButton-secondary"] *,
+    button[data-testid="stBaseButton-primary"] *,
+    button[data-testid="stBaseButton-secondary"] * {
+        color: #FFFFFF !important;
+        fill: #FFFFFF !important;
     }
-    
-    /* Sidebar Styling */
+
+    .stDownloadButton button,
+    .stDownloadButton button[data-testid^="stBaseButton"] {
+        background-color: #FFFFFF !important;
+        background-image: none !important;
+        color: #18181B !important;
+        border: 2px solid #18181B !important;
+    }
+
+    .stDownloadButton button:hover,
+    .stDownloadButton button:focus-visible {
+        background-color: #E4E4E7 !important;
+        color: #18181B !important;
+        border: 2px solid #18181B !important;
+    }
+
+    .stDownloadButton button * {
+        color: #18181B !important;
+        fill: #18181B !important;
+    }
+
+    button[data-testid^="stBaseButton"]:disabled,
+    button[data-testid^="stBaseButton"]:disabled:hover,
+    .stDownloadButton button:disabled {
+        background-color: #F4F4F5 !important;
+        color: #3F3F46 !important;
+        border-color: #52525B !important;
+        cursor: not-allowed;
+    }
+
+    button[data-testid^="stBaseButton"]:disabled * {
+        color: #3F3F46 !important;
+    }
+
     [data-testid="stSidebar"] {
-        background-color: #FAFAFA;
-        border-right: 1px solid #E4E4E7;
+        background-color: var(--kg-sidebar);
+        border-right: 1px solid var(--kg-rule);
+        color: var(--kg-text);
     }
-    
-    /* Tabs Styling */
+
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] [data-testid="stWidgetLabel"] {
+        color: var(--kg-text) !important;
+    }
+
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+        color: var(--kg-text) !important;
+    }
+
+    [data-testid="stSidebar"] .stButton button[data-testid="stBaseButton-primary"],
+    [data-testid="stSidebar"] .stButton button[data-testid="stBaseButton-primary"] *,
+    [data-testid="stSidebar"] .stButton button[data-testid="stBaseButton-secondary"],
+    [data-testid="stSidebar"] .stButton button[data-testid="stBaseButton-secondary"] * {
+        color: #FFFFFF !important;
+        fill: #FFFFFF !important;
+    }
+
+    [data-testid="stSidebar"] .stDownloadButton button,
+    [data-testid="stSidebar"] .stDownloadButton button * {
+        color: #18181B !important;
+        fill: #18181B !important;
+    }
+
     .stTabs [data-baseweb="tab-list"] {
         gap: 2rem;
         background-color: transparent;
-        border-bottom: 1px solid #E4E4E7;
+        border-bottom: 1px solid var(--kg-rule);
     }
-    
+
     .stTabs [data-baseweb="tab"] {
         font-size: 1rem;
-        font-weight: 500;
-        color: #71717A;
+        font-weight: 600;
+        color: var(--kg-muted) !important;
         border-bottom: 2px solid transparent;
         transition: color 0.2s;
         padding-top: 1rem;
         padding-bottom: 1rem;
     }
-    
+
     .stTabs [aria-selected="true"] {
-        color: #0A0A0A !important;
-        border-bottom-color: #0A0A0A !important;
+        color: var(--kg-text) !important;
+        border-bottom-color: var(--kg-text) !important;
     }
-    
-    /* Streamlit widgets overrides */
+
     .stRadio label, .stSelectbox label, .stSlider label, .stNumberInput label, .stCheckbox label {
-        color: #0A0A0A !important;
-        font-weight: 500 !important;
+        color: var(--kg-text) !important;
+        font-weight: 600 !important;
+    }
+
+    [data-testid="stMetricLabel"],
+    [data-testid="stMetricLabel"] *,
+    [data-testid="stImageCaption"],
+    [data-testid="stImageCaption"] *,
+    [data-testid="stCaption"],
+    [data-testid="stCaption"] *,
+    [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] *,
+    .stCaption,
+    figcaption {
+        color: #18181B !important;
+        font-weight: 600 !important;
+    }
+
+    [data-testid="stDataFrame"] {
+        color: var(--kg-text);
+        border: 1px solid var(--kg-border);
+    }
+
+    .stAlert {
+        color: var(--kg-text);
+        border: 1px solid var(--kg-border);
+    }
+
+    [data-testid="stExpander"] {
+        background: #FFFFFF !important;
+        border: 1px solid #52525B !important;
+        border-radius: 4px;
+        color: var(--kg-text) !important;
+    }
+
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] summary p,
+    [data-testid="stExpander"] summary span {
+        color: var(--kg-text) !important;
+        font-weight: 600 !important;
+    }
+
+    .kg-meta {
+        color: #18181B !important;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stFileUploader"] section {
+        background-color: #FFFFFF !important;
+        color: #18181B !important;
+        border-color: #52525B !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -189,7 +330,7 @@ def reset_demo():
 with st.sidebar:
     # 1. Reset Button for live demos
     st.button("Reset Analysis", on_click=reset_demo, use_container_width=True)
-    st.markdown("<hr style='border: none; border-top: 1px solid #E4E4E7; margin: 1rem 0 2rem 0;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='border: none; border-top: 1px solid #A1A1AA; margin: 1rem 0 2rem 0;'>", unsafe_allow_html=True)
 
     # 2. Upload and Sample Data
     st.markdown(h_title(ICON_FOLDER, "Data Source"), unsafe_allow_html=True)
@@ -201,7 +342,7 @@ with st.sidebar:
         if uploaded_file is not None:
             try:
                 image = Image.open(uploaded_file).convert("RGB")
-                st.markdown(f"<span style='color: #71717A; font-size: 0.85rem;'>Detected Dimensions: {image.width}x{image.height} px</span>", unsafe_allow_html=True)
+                st.markdown(f"<span class='kg-meta'>Detected Dimensions: {image.width}x{image.height} px</span>", unsafe_allow_html=True)
             except Exception:
                 st.error("Invalid image format.")
                 image = None
@@ -212,14 +353,14 @@ with st.sidebar:
             selected_sample = st.selectbox("Select Sample", sample_files)
             try:
                 image = Image.open(sample_dir / selected_sample).convert("RGB")
-                st.markdown(f"<span style='color: #71717A; font-size: 0.85rem;'>Detected Dimensions: {image.width}x{image.height} px</span>", unsafe_allow_html=True)
+                st.markdown(f"<span class='kg-meta'>Detected Dimensions: {image.width}x{image.height} px</span>", unsafe_allow_html=True)
             except Exception:
                 st.error("Error loading sample.")
                 image = None
         else:
             st.warning("No sample files found in data/synthetic/")
 
-    st.markdown("<hr style='border: none; border-top: 1px solid #E4E4E7; margin: 2rem 0;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='border: none; border-top: 1px solid #A1A1AA; margin: 2rem 0;'>", unsafe_allow_html=True)
     
     # 3. Calibration
     st.markdown(h_title(ICON_RULER, "Calibration & Crop"), unsafe_allow_html=True)
@@ -227,23 +368,29 @@ with st.sidebar:
     # Crop Profile selection to dynamically set Advanced parameters
     crop_profile = st.selectbox("Crop Profile", ["Sugarcane", "Maize"])
     def_exg = 25
-    def_min_gap = 30 if crop_profile == "Sugarcane" else 20
+    def_min_gap = 18 if crop_profile == "Sugarcane" else 14
     def_occupancy = 0.18 if crop_profile == "Sugarcane" else 0.15
     def_row_spacing = 24 if crop_profile == "Sugarcane" else 15
     
-    meters_per_pixel = st.number_input("Pixel Scale (m/px)", value=0.05, step=0.01, format="%.3f")
+    meters_per_pixel = st.number_input(
+        "Pixel Scale (m/px)",
+        value=0.0,
+        step=0.01,
+        format="%.3f",
+        help="Set 0 if the image is uncalibrated. Gap detection then uses Min Gap Length in pixels.",
+    )
     if meters_per_pixel <= 0:
         meters_per_pixel = None
         
-    st.markdown("<hr style='border: none; border-top: 1px solid #E4E4E7; margin: 2rem 0;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='border: none; border-top: 1px solid #A1A1AA; margin: 2rem 0;'>", unsafe_allow_html=True)
     
     # 4. Advanced Tuning
     st.markdown(h_title(ICON_SETTINGS, "Advanced Tuning"), unsafe_allow_html=True)
     
     with st.expander("Pipeline Parameters", expanded=False):
         exg_threshold = st.slider("ExG Threshold", 0, 100, def_exg, help="Greenness threshold for vegetation segmentation.")
-        min_gap_px = st.slider("Min Gap Length (px)", 10, 100, def_min_gap, help="Minimum pixel length to be considered a planting gap.")
-        occupancy_threshold = st.slider("Occupancy Threshold", 0.0, 1.0, def_occupancy, step=0.01, help="Fraction of row band that must contain vegetation to be valid.")
+        min_gap_px = st.slider("Min Gap Length (px)", 6, 100, def_min_gap, help="Minimum pixel length to be considered a planting gap. This bound is always applied, even when a metre scale is set.")
+        occupancy_threshold = st.slider("Occupancy Threshold", 0.0, 1.0, def_occupancy, step=0.01, help="Baseline vegetation fraction used when deciding whether a row column is planted.")
         min_row_spacing_px = st.slider("Min Row Spacing (px)", 10, 100, def_row_spacing, help="Minimum pixel distance between adjacent rows.")
 
     with st.expander("Orientation Overrides", expanded=False):
@@ -300,7 +447,7 @@ if 'analysis_result' in st.session_state and 'processed_image' in st.session_sta
         
         if result.pattern_hints:
             for hint in result.pattern_hints:
-                st.markdown(f"<div style='border-left: 2px solid #0A0A0A; padding-left: 1rem; color: #71717A; margin-bottom: 1rem;'>{get_icon(ICON_INFO, size=14, color='#71717A')} Analysis Hint: {hint.get('description', '')}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='border-left: 2px solid #18181B; padding-left: 1rem; color: #3F3F46; margin-bottom: 1rem;'>{get_icon(ICON_INFO, size=14, color='#3F3F46')} Analysis Hint: {hint.get('description', '')}</div>", unsafe_allow_html=True)
         
         # Visual Tabs
         st.markdown(f"<br>{h_title(ICON_BAR_CHART, 'Visualization & Diagnostics')}", unsafe_allow_html=True)
@@ -316,8 +463,13 @@ if 'analysis_result' in st.session_state and 'processed_image' in st.session_sta
         
         with tab2:
             st.markdown("<br>", unsafe_allow_html=True)
-            if "mask" in result.debug_images:
-                st.image(result.debug_images["mask"], caption="Vegetation Segmentation Mask", use_container_width=True)
+            vegetation = result.debug_images.get("occupancy_mask") or result.debug_images.get("mask")
+            if vegetation is not None:
+                st.image(
+                    vegetation,
+                    caption="Vegetation Mask (gaps from holes in this mask)",
+                    use_container_width=True,
+                )
             else:
                 st.warning("Mask debug image not available.")
                 
@@ -337,7 +489,7 @@ if 'analysis_result' in st.session_state and 'processed_image' in st.session_sta
 
 
         # Gap Table
-        st.markdown("<hr style='border: none; border-top: 1px solid #E4E4E7; margin: 3rem 0;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='border: none; border-top: 1px solid #A1A1AA; margin: 3rem 0;'>", unsafe_allow_html=True)
         st.markdown(h_title(ICON_TABLE, 'Detected Gaps (Priority Sorted)'), unsafe_allow_html=True)
         
         df_gaps = pd.DataFrame()
@@ -357,7 +509,7 @@ if 'analysis_result' in st.session_state and 'processed_image' in st.session_sta
             st.info("No gaps detected matching the minimum criteria.")
 
 
-        st.markdown("<hr style='border: none; border-top: 1px solid #E4E4E7; margin: 3rem 0;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='border: none; border-top: 1px solid #A1A1AA; margin: 3rem 0;'>", unsafe_allow_html=True)
         st.markdown(h_title(ICON_FOLDER, 'Export Reports'), unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
@@ -417,4 +569,4 @@ if 'analysis_result' in st.session_state and 'processed_image' in st.session_sta
 else:
     # Empty State
     st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
-    st.markdown(f"<div style='text-align: center; color: #71717A; font-weight: 300;'>{get_icon(ICON_FOLDER, size=24, color='#71717A')}<br><br>Please select or upload a field image in the sidebar and click <b>Run Analysis</b> to begin.</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align: center; color: #18181B; font-weight: 600;'>{get_icon(ICON_FOLDER, size=24, color='#18181B')}<br><br>Please select or upload a field image in the sidebar and click <b>Run Analysis</b> to begin.</div>", unsafe_allow_html=True)
