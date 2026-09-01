@@ -11,6 +11,15 @@ from .orientation import RotatedImage
 from .preprocessing import WorkingImage
 from .rows import RowBand
 
+# Amber fill + dual stroke stays readable on green canopy and brown soil.
+# Red at 42% alpha collapsed into soil (132, 91, 54) and vanished.
+GAP_FILL_RGB = (255, 230, 0)
+GAP_STROKE_DARK_RGB = (17, 17, 17)
+GAP_STROKE_LIGHT_RGB = (255, 255, 255)
+GAP_FILL_ALPHA = 0.82
+ROW_GUIDE_RGB = (0, 200, 255)
+ROW_GUIDE_STROKE_RGB = (17, 17, 17)
+
 
 def _apply_affine(points: np.ndarray, matrix: np.ndarray) -> np.ndarray:
     points = np.asarray(points, dtype=np.float64)
@@ -64,6 +73,18 @@ def _row_segment_original(
     return working.working_to_original(points)
 
 
+def _draw_high_contrast_line(
+    image: np.ndarray, start: tuple[int, int], end: tuple[int, int]
+) -> None:
+    cv2.line(image, start, end, ROW_GUIDE_STROKE_RGB, 3, cv2.LINE_AA)
+    cv2.line(image, start, end, ROW_GUIDE_RGB, 1, cv2.LINE_AA)
+
+
+def _stroke_polygon(image: np.ndarray, polygon: np.ndarray) -> None:
+    cv2.polylines(image, [polygon], True, GAP_STROKE_DARK_RGB, 4, cv2.LINE_AA)
+    cv2.polylines(image, [polygon], True, GAP_STROKE_LIGHT_RGB, 2, cv2.LINE_AA)
+
+
 def draw_gap_overlay(
     original: np.ndarray,
     gaps: list[Gap],
@@ -77,20 +98,15 @@ def draw_gap_overlay(
     if draw_row_guides:
         for row in rows:
             endpoints = np.rint(_row_segment_original(row, rotation, working)).astype(int)
-            cv2.line(
-                layer,
-                tuple(endpoints[0]),
-                tuple(endpoints[1]),
-                (255, 220, 0),
-                1,
-                cv2.LINE_AA,
+            _draw_high_contrast_line(
+                layer, tuple(endpoints[0]), tuple(endpoints[1])
             )
     for gap in gaps:
         polygon = np.asarray(gap.polygon_original, dtype=np.int32)
-        cv2.fillPoly(layer, [polygon], color=(255, 20, 20))
-    alpha = 0.42 if gaps or draw_row_guides else 0.0
+        cv2.fillPoly(layer, [polygon], color=GAP_FILL_RGB)
+    alpha = GAP_FILL_ALPHA if gaps or draw_row_guides else 0.0
     overlay = cv2.addWeighted(layer, alpha, base, 1.0 - alpha, 0.0)
     for gap in gaps:
         polygon = np.asarray(gap.polygon_original, dtype=np.int32)
-        cv2.polylines(overlay, [polygon], True, (255, 0, 0), 2, cv2.LINE_AA)
+        _stroke_polygon(overlay, polygon)
     return overlay
