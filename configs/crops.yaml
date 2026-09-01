@@ -12,8 +12,12 @@ sugarcane_demo:
   min_row_spacing_px: 24
   row_band_half_width_px: 5
   occupancy_threshold: 0.18
-  min_gap_m: 1.0
-  min_gap_px: 30
+  occupancy_smoothing_sigma: 1.0
+  min_gap_m: 0.45
+  min_gap_px: 18
+  merge_gap_separation_px: 8
+  gap_occupancy_ratio: 0.30
+  max_gap_island_px: 6
   planting_units_per_meter: 1.0
   safety_factor: 1.0
 

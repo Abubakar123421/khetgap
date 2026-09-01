@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-from scipy.ndimage import gaussian_filter1d
+from scipy.ndimage import gaussian_filter1d, median_filter
 from scipy.signal import find_peaks
 
 from .models import CropConfig
@@ -58,7 +58,7 @@ def detect_row_bands(
         y2 = min(binary.shape[0], peak + half_width + 1)
         band = binary[y1:y2]
         occupancy = band.mean(axis=0)
-        support = occupancy >= max(0.04, config.occupancy_threshold * 0.35)
+        support = occupancy >= max(0.03, config.occupancy_threshold * 0.25)
         indices = np.flatnonzero(support)
         if indices.size < 2:
             continue
@@ -83,12 +83,27 @@ def detect_row_bands(
 def row_occupancy(
     rotated_mask: np.ndarray, row: RowBand, config: CropConfig, scale: float
 ) -> np.ndarray:
-    y1 = max(0, row.y_center - row.half_width)
-    y2 = min(rotated_mask.shape[0], row.y_center + row.half_width + 1)
+    """1D vegetation occupancy along a planting line from the gap-preserving mask.
+
+    Each column is the fraction of vegetation pixels in a tight band around the
+    row center. A short median keeps specks from splitting a hole without
+    filling the hole the way a Gaussian would.
+    """
+    # Narrower than row finding: adjacent-row / alley vegetation must not
+    # keep a real hole above the present/absent cut.
+    half = max(2, int(round(row.half_width * 0.72)))
+    y1 = max(0, row.y_center - half)
+    y2 = min(rotated_mask.shape[0], row.y_center + half + 1)
     band = rotated_mask[y1:y2, row.x_start : row.x_end + 1] > 0
-    occupancy = band.mean(axis=0).astype(float)
-    sigma = max(0.5, config.occupancy_smoothing_sigma * scale)
-    return gaussian_filter1d(occupancy, sigma=sigma)
+    occupancy = band.mean(axis=0).astype(np.float64)
+    # Median kills 1-px specks. Gaussian would bleed plants into mask holes.
+    kernel = max(3, int(round(config.occupancy_smoothing_sigma * 3.0 * max(scale, 1.0))))
+    if kernel % 2 == 0:
+        kernel += 1
+    kernel = min(kernel, 5)
+    if occupancy.size >= kernel:
+        occupancy = median_filter(occupancy, size=kernel)
+    return occupancy
 
 
 def render_row_debug(rotated_mask: np.ndarray, rows: list[RowBand]) -> np.ndarray:
@@ -98,6 +113,25 @@ def render_row_debug(rotated_mask: np.ndarray, rows: list[RowBand]) -> np.ndarra
             canvas,
             (row.x_start, row.y_center),
             (row.x_end, row.y_center),
+            (0, 200, 255),
+            1,
+            cv2.LINE_AA,
+        )
+    return canvas
+
+
+def render_column_debug(vertical_mask: np.ndarray, rows: list[RowBand]) -> np.ndarray:
+    """Draw planting columns on the vertical deskew using detection-space bands."""
+    canvas = cv2.cvtColor(vertical_mask, cv2.COLOR_GRAY2RGB)
+    height, width = vertical_mask.shape[:2]
+    for row in rows:
+        x_center = int(np.clip(row.y_center, 0, max(0, width - 1)))
+        y1 = int(np.clip(row.x_start, 0, max(0, height - 1)))
+        y2 = int(np.clip(row.x_end, 0, max(0, height - 1)))
+        cv2.line(
+            canvas,
+            (x_center, y1),
+            (x_center, y2),
             (0, 200, 255),
             1,
             cv2.LINE_AA,

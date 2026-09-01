@@ -48,7 +48,7 @@ def json_default(value: object) -> object:
 def main() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     summaries: dict[str, object] = {}
-    config = CropConfig(min_gap_px=35, occupancy_threshold=0.16)
+    config = CropConfig(min_gap_px=18, occupancy_threshold=0.16)
     supported_extensions = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".webp"}
     image_paths = sorted(
         [p for p in INPUT.iterdir() if p.suffix.lower() in supported_extensions]
