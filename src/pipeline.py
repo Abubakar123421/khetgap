@@ -10,11 +10,11 @@ import numpy as np
 from .gaps import detect_gaps
 from .metrics import calculate_metrics, empty_metrics
 from .models import AnalysisOverrides, AnalysisResult, CropConfig
-from .orientation import OrientationEstimate, estimate_row_angle, rotate_keep_bounds
+from .orientation import OrientationEstimate, align_planting_vertical, estimate_row_angle
 from .overlay import candidate_to_gap, draw_gap_overlay
 from .patterns import analyze_gap_patterns
 from .preprocessing import prepare_working_image
-from .rows import detect_row_bands, render_row_debug, row_occupancy
+from .rows import detect_row_bands, render_column_debug, row_occupancy
 from .segmentation import clean_mask, vegetation_mask
 
 
@@ -122,11 +122,15 @@ def analyze_field(
 
     try:
         exg, raw_mask = vegetation_mask(working.image, crop_config)
-        mask = clean_mask(raw_mask, crop_config, working.scale)
+        mask = clean_mask(raw_mask, crop_config, working.scale, close_holes=True)
+        occupancy_mask = clean_mask(
+            raw_mask, crop_config, working.scale, close_holes=False
+        )
         debug_images: dict[str, np.ndarray] = {
             "excess_green": exg,
             "raw_mask": raw_mask,
             "mask": mask,
+            "occupancy_mask": occupancy_mask,
         }
         vegetation_fraction = float((mask > 0).mean())
         if vegetation_fraction < 0.0005:
@@ -149,17 +153,26 @@ def analyze_field(
             warnings.append(
                 "Row orientation confidence is low; use a manual angle or a tighter ROI if alignment is poor."
             )
-        rotation = rotate_keep_bounds(mask, orientation.angle_deg)
-        debug_images["rotated_mask"] = rotation.image
+        vertical, detection = align_planting_vertical(mask, orientation.angle_deg)
+        occupancy_vertical = cv2.warpAffine(
+            occupancy_mask,
+            vertical.forward_matrix,
+            (vertical.image.shape[1], vertical.image.shape[0]),
+            flags=cv2.INTER_NEAREST,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0,
+        )
+        occupancy_detection = np.ascontiguousarray(occupancy_vertical.T)
+        debug_images["rotated_mask"] = vertical.image
 
         rows, projection = detect_row_bands(
-            rotation.image,
+            detection.image,
             crop_config,
             working.scale,
             meters_per_pixel,
         )
         debug_images["row_projection"] = _projection_debug(projection)
-        debug_images["row_bands"] = render_row_debug(rotation.image, rows)
+        debug_images["row_bands"] = render_column_debug(vertical.image, rows)
         if not rows:
             return _failure(
                 "no_rows",
@@ -174,7 +187,7 @@ def analyze_field(
         occupancy_profiles: list[tuple[int, np.ndarray]] = []
         for row in rows:
             occupancy = row_occupancy(
-                rotation.image, row, crop_config, working.scale
+                occupancy_detection, row, crop_config, working.scale
             )
             occupancy_profiles.append((row.row_id, occupancy))
             candidates.extend(
@@ -189,7 +202,7 @@ def analyze_field(
         debug_images["occupancy_profiles"] = _occupancy_debug(occupancy_profiles)
 
         gaps = [
-            candidate_to_gap(candidate, rotation, working, meters_per_pixel)
+            candidate_to_gap(candidate, detection, working, meters_per_pixel)
             for candidate in candidates
         ]
         gaps.sort(key=lambda gap: (gap.row_id, gap.start_px))
@@ -201,7 +214,7 @@ def analyze_field(
             image,
             gaps,
             rows,
-            rotation,
+            detection,
             working,
             crop_config.draw_row_guides,
         )

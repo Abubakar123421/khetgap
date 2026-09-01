@@ -6,9 +6,17 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal import find_peaks
 
 from .models import CropConfig
 from .preprocessing import scaled_pixels
+
+# Planting axis vs alley axis only. Not a lock to 0°/90° yaw.
+_AXIS_FLIP_RATIO = 1.12
+_XY_SWAP = np.array(
+    [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=np.float64
+)
 
 
 @dataclass(frozen=True)
@@ -32,6 +40,10 @@ def normalize_line_angle(angle_deg: float) -> float:
     while angle_deg < -90.0:
         angle_deg += 180.0
     return float(angle_deg)
+
+
+def perpendicular_line_angle(angle_deg: float) -> float:
+    return normalize_line_angle(angle_deg + 90.0)
 
 
 def _weighted_median(values: np.ndarray, weights: np.ndarray) -> float:
@@ -96,7 +108,8 @@ def _projection_score(mask: np.ndarray, angle_deg: float) -> float:
 
 
 def projection_search(mask: np.ndarray, config: CropConfig) -> OrientationEstimate:
-    limit = config.orientation_search_limit_deg
+    # Full line-angle circle so drone yaw is not clipped to ±45°.
+    limit = min(90.0, max(float(config.orientation_search_limit_deg), 90.0))
     step = config.orientation_search_step_deg
     angles = np.arange(-limit, limit + step * 0.5, step)
     scores = np.asarray([_projection_score(mask, float(angle)) for angle in angles])
@@ -105,15 +118,6 @@ def projection_search(mask: np.ndarray, config: CropConfig) -> OrientationEstima
     baseline = float(np.median(scores))
     confidence = float(np.clip((best - baseline) / max(best, 1e-9), 0.0, 1.0))
     return OrientationEstimate(float(angles[best_index]), confidence, "projection", 0)
-
-
-def estimate_row_angle(
-    mask: np.ndarray, config: CropConfig, scale: float
-) -> OrientationEstimate:
-    hough = estimate_hough_angle(mask, config, scale)
-    if hough is not None and hough.confidence >= 0.20:
-        return hough
-    return projection_search(mask, config)
 
 
 def rotate_keep_bounds(image: np.ndarray, angle_deg: float) -> RotatedImage:
@@ -134,3 +138,139 @@ def rotate_keep_bounds(image: np.ndarray, angle_deg: float) -> RotatedImage:
         borderValue=0,
     )
     return RotatedImage(rotated, matrix, cv2.invertAffineTransform(matrix))
+
+
+def _homogeneous(matrix: np.ndarray) -> np.ndarray:
+    stacked = np.eye(3, dtype=np.float64)
+    stacked[:2, :] = np.asarray(matrix, dtype=np.float64)
+    return stacked
+
+
+def vertical_deskew_angle(horizontal_deskew_deg: float) -> float:
+    """Rotation that stands planting lines up, given the rotation that lays them flat."""
+    return float(horizontal_deskew_deg + 90.0)
+
+
+def transpose_to_detection(vertical: RotatedImage) -> RotatedImage:
+    """Map vertical planting columns onto horizontal bands for 1D occupancy.
+
+    Detection stays the existing row/gap code. Inverse maps those coordinates
+    back through the swap into the vertical deskew, then into the working image.
+    """
+    image = np.ascontiguousarray(vertical.image.T)
+    forward = (_XY_SWAP @ _homogeneous(vertical.forward_matrix))[:2]
+    inverse = (_homogeneous(vertical.inverse_matrix) @ _XY_SWAP)[:2]
+    return RotatedImage(image, forward, inverse)
+
+
+def align_planting_vertical(
+    mask: np.ndarray, horizontal_deskew_deg: float
+) -> tuple[RotatedImage, RotatedImage]:
+    """Deskew planting lines to vertical, then transpose for the occupancy detector."""
+    vertical = rotate_keep_bounds(mask, vertical_deskew_angle(horizontal_deskew_deg))
+    return vertical, transpose_to_detection(vertical)
+
+
+def row_axis_score(
+    mask: np.ndarray, angle_deg: float, config: CropConfig, scale: float
+) -> float:
+    """Score how well `angle_deg` lays planting lines horizontal.
+
+    Used only to pick planting axis versus alley axis (θ vs θ+90), not to lock
+    yaw to cardinal angles. After that pick, the pipeline stands the lines up.
+    """
+    rotated = rotate_keep_bounds(mask, angle_deg).image
+    binary = rotated > 0
+    profile = binary.sum(axis=1).astype(np.float64)
+    peak = float(profile.max())
+    if peak <= 0.0 or profile.size < 3:
+        return 0.0
+    smoothed = gaussian_filter1d(profile, sigma=max(1.0, 2.0 * scale))
+    min_distance = scaled_pixels(config.min_row_spacing_px, scale, 4)
+    prominence = max(2.0, float(smoothed.max()) * config.row_prominence_ratio)
+    peaks, _ = find_peaks(smoothed, distance=min_distance, prominence=prominence)
+    if peaks.size < 2:
+        return 0.0
+    spacings = np.diff(peaks).astype(np.float64)
+    mean_spacing = float(spacings.mean())
+    spacing_cv = float(spacings.std() / max(mean_spacing, 1e-6))
+    relative = smoothed / max(float(smoothed.max()), 1e-9)
+    variance = float(np.var(relative))
+    empty_fraction = float((relative < 0.20).mean())
+    half = max(2, scaled_pixels(config.row_band_half_width_px, scale, 2))
+    row_fill = []
+    alley_fill = []
+    for peak_y in peaks:
+        y1 = max(0, int(peak_y) - half)
+        y2 = min(binary.shape[0], int(peak_y) + half + 1)
+        row_fill.append(float(binary[y1:y2].mean()))
+    alley_half = max(1, int(round(2.0 * scale)))
+    for left, right in zip(peaks[:-1], peaks[1:]):
+        mid = int((int(left) + int(right)) // 2)
+        y1 = max(0, mid - alley_half)
+        y2 = min(binary.shape[0], mid + alley_half + 1)
+        alley_fill.append(float(binary[y1:y2].mean()))
+    fill = float(np.mean(row_fill))
+    alley = float(np.mean(alley_fill)) if alley_fill else 1.0
+    contrast = (fill - alley) / max(fill, 1e-6)
+    expected = float(min_distance)
+    spacing_fit = 1.0
+    if mean_spacing < expected * 0.80:
+        spacing_fit = mean_spacing / expected
+    height = float(rotated.shape[0])
+    if mean_spacing > height * 0.35:
+        spacing_fit *= (height * 0.35) / mean_spacing
+    regularity = 1.0 / (1.0 + 4.0 * spacing_cv)
+    return float(
+        peaks.size
+        * variance
+        * regularity
+        * (0.25 + empty_fraction)
+        * (0.25 + max(contrast, 0.0))
+        * spacing_fit
+    )
+
+
+def disambiguate_row_axis(
+    mask: np.ndarray,
+    estimate: OrientationEstimate,
+    config: CropConfig,
+    scale: float,
+) -> OrientationEstimate:
+    angle = normalize_line_angle(estimate.angle_deg)
+    perpendicular = perpendicular_line_angle(angle)
+    score = row_axis_score(mask, angle, config, scale)
+    perpendicular_score = row_axis_score(mask, perpendicular, config, scale)
+    if perpendicular_score > score * _AXIS_FLIP_RATIO:
+        confidence = float(
+            np.clip(
+                perpendicular_score / max(perpendicular_score + score, 1e-9),
+                0.0,
+                1.0,
+            )
+        )
+        return OrientationEstimate(
+            perpendicular,
+            max(float(estimate.confidence), confidence),
+            estimate.method,
+            estimate.line_count,
+        )
+    return OrientationEstimate(angle, estimate.confidence, estimate.method, estimate.line_count)
+
+
+def estimate_row_angle(
+    mask: np.ndarray, config: CropConfig, scale: float
+) -> OrientationEstimate:
+    """Estimate any-yaw rotation that lays planting lines horizontal.
+
+    Hough or a full ±90° projection search finds the continuous yaw. Axis
+    disambiguation then chooses planting lines versus alleys. The pipeline
+    adds 90° so working-space columns run vertically.
+    """
+    hough = estimate_hough_angle(mask, config, scale)
+    if hough is not None and hough.confidence >= 0.20:
+        candidate = hough
+    else:
+        candidate = projection_search(mask, config)
+    return disambiguate_row_axis(mask, candidate, config, scale)
+

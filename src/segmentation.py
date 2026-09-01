@@ -36,7 +36,12 @@ def vegetation_mask(
     return exg, mask.astype(np.uint8) * 255
 
 
-def clean_mask(mask: np.ndarray, config: CropConfig, scale: float) -> np.ndarray:
+def clean_mask(
+    mask: np.ndarray,
+    config: CropConfig,
+    scale: float,
+    close_holes: bool = True,
+) -> np.ndarray:
     kernel_size = scaled_pixels(config.morphology_kernel_px, scale)
     if kernel_size % 2 == 0:
         kernel_size += 1
@@ -49,12 +54,15 @@ def clean_mask(mask: np.ndarray, config: CropConfig, scale: float) -> np.ndarray
         kernel,
         iterations=config.morphology_iterations,
     )
-    cleaned = cv2.morphologyEx(
-        cleaned,
-        cv2.MORPH_CLOSE,
-        kernel,
-        iterations=config.morphology_iterations,
-    )
+    if close_holes:
+        # Closing is useful for row continuity, but it fills planting holes.
+        # Occupancy profiling should call this with close_holes=False.
+        cleaned = cv2.morphologyEx(
+            cleaned,
+            cv2.MORPH_CLOSE,
+            kernel,
+            iterations=config.morphology_iterations,
+        )
 
     minimum_area = max(1, int(round(config.min_component_area_px * scale * scale)))
     count, labels, stats, _ = cv2.connectedComponentsWithStats(cleaned, connectivity=8)

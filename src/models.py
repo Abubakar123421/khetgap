@@ -31,7 +31,7 @@ class CropConfig:
     hough_min_line_length_px: int = 60
     hough_max_line_gap_px: int = 25
     min_orientation_lines: int = 3
-    orientation_search_limit_deg: float = 45.0
+    orientation_search_limit_deg: float = 90.0
     orientation_search_step_deg: float = 1.0
     expected_row_spacing_m: float = 1.2
     min_row_spacing_px: int = 24
@@ -39,12 +39,14 @@ class CropConfig:
     row_band_half_width_px: int = 5
     min_row_vegetation_fraction: float = 0.025
     occupancy_threshold: float = 0.18
-    occupancy_smoothing_sigma: float = 2.0
-    min_gap_m: float = 1.0
-    min_gap_px: int = 30
+    occupancy_smoothing_sigma: float = 1.0
+    min_gap_m: float = 0.45
+    min_gap_px: int = 18
     gap_border_margin_px: int = 4
-    merge_gap_separation_px: int = 5
+    merge_gap_separation_px: int = 8
     require_gap_bracketing: bool = True
+    gap_occupancy_ratio: float = 0.30
+    max_gap_island_px: int = 6
     planting_units_per_meter: float = 1.0
     safety_factor: float = 1.0
     pattern_x_tolerance_px: int = 35
@@ -82,6 +84,10 @@ class CropConfig:
             raise ValueError("min_row_vegetation_fraction must be in [0, 1)")
         if self.min_gap_px < 1 or self.min_gap_m <= 0:
             raise ValueError("minimum gap lengths must be positive")
+        if not 0 < self.gap_occupancy_ratio < 1:
+            raise ValueError("gap_occupancy_ratio must be between 0 and 1")
+        if self.max_gap_island_px < 0:
+            raise ValueError("max_gap_island_px must be non-negative")
         if self.planting_units_per_meter <= 0 or self.safety_factor < 1.0:
             raise ValueError("planting rate must be positive and safety_factor at least 1.0")
         if self.orientation_search_step_deg <= 0:
