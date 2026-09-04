@@ -463,7 +463,9 @@ if 'analysis_result' in st.session_state and 'processed_image' in st.session_sta
         
         with tab2:
             st.markdown("<br>", unsafe_allow_html=True)
-            vegetation = result.debug_images.get("occupancy_mask") or result.debug_images.get("mask")
+            vegetation = result.debug_images.get("occupancy_mask")
+            if vegetation is None:
+                vegetation = result.debug_images.get("mask")
             if vegetation is not None:
                 st.image(
                     vegetation,
