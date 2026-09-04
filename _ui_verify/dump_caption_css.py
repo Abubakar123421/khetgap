@@ -1,0 +1,10 @@
+from pathlib import Path
+p = Path(r".venv/Lib/site-packages/streamlit/static/static/js/ImageList.uMcrwBuL.js")
+t = p.read_text(encoding="utf-8", errors="ignore")
+idx = t.find("stImageCaption")
+print(t[max(0, idx-400): idx+800])
+print("----METRIC----")
+m = Path(r".venv/Lib/site-packages/streamlit/static/static/js/Metric.BEvnGqRJ.js")
+mt = m.read_text(encoding="utf-8", errors="ignore")
+i2 = mt.find("stMetricLabel")
+print(mt[max(0, i2-400): i2+800])
